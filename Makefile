@@ -1,20 +1,19 @@
 CC=msp430-gcc
-CFLAGS=-Os -Wall -g -mmcu=msp430g2452
+CFLAGS=-Os -Wall -g -mmcu=msp430g2553
 
-RPI_OBJS=rpi.o
+LCD_OBJS=lcd.o
 ROTARY_OBJ=rotary.o
 
-
-all: rotary rpi
+all: rotary lcd
 
 rotary: $(ROTARY_OBJ)
 	$(CC) $(CFLAGS) -Wa,-ahl=rotary.lst -o rotary.elf $(ROTARY_OBJ)
 
-rpi: $(RPI_OBJS)
-	$(CC) $(CFLAGS) -Wa,-ahl=rpi.lst -o rpi.elf $(RPI_OBJS)
+lcd: $(LCD_OBJS)
+	$(CC) $(CFLAGS) -Wa,-ahl=lcd.lst -o lcd.elf $(LCD_OBJS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -fr rpi.elf rotary.elf $(OBJS)
+	rm lcd.elf rotary.elf $(OBJS)

@@ -1,6 +1,6 @@
 #include <msp430g2553.h>
 #include <intrinsics.h>
-#include "chars.h"
+#include "chars2.h"
 
 /*****************************************************************************
 
@@ -70,25 +70,37 @@
 #define setPinLow(__pin) P2OUT &= ~__pin
 #define setPinHigh(__pin) P2OUT |= __pin
 
-volatile int  charIndex = 0;     // index for the encoder - which letter to show ATM
+/* LCD usage */
+#define LCD_USE_1 0x00
+#define LCD_USE_2 0x01
+#define LCD_USE_BOTH 0x02
 
 /* data input */
-#define SHIFT_REG_CLOCK_MAX = 12
-#define TARGET_CPU = 0x00
-#define TARGET_FREE = 0x01
-#define TARGET_UPTIME = 0x02
-#define TARGEt_NET_IN = 0x03
-#define TARGET_NET_OUT = 0x04
-#define TARGETS_COUNT = 5;
+#define SHIFT_REG_CLOCK_MAX 10 // 0x0A
+#define TARGET_CPU          0x00
+#define TARGET_FREE         0x01
+#define TARGET_UPTIME       0x02
+#define TARGEt_NET_IN       0x03
+#define TARGET_NET_OUT      0x04
+#define TARGETS_COUNT       0x05
 
-volatile int  shiftReg = 0x00;   // new bits are received into here and put from the right
-volatile int  shiftRegClock = 0; // counter - as soon as it gets to 8, the shift register is treated as a command value
-volatile int  targetIndex[5] = {0,0,0,0,0};
-volatile char targets[5][16] = { "", "", "", "", ""};
+#define CMD_MASK            0x7F
+#define CMD_LENGTH_BITS     0x07
+#define CMD_CLEAR           0x7F /* clear command is 127 / 01111111 */
 
-/* management for long-time running funcs */
-volatile char interrupted = 0x00;   // long-time runnig functions will check for this var and exit if needed
-volatile int  isRunning = 0;     // long-time running function will set this flag while running
+//const int char_map[] = { 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 14, 26, 43, 45, 0, 0 };
+
+volatile int shiftReg = 0x00;   // new bits are received into here and put from the right
+volatile int shiftRegClock = 0; // counter - as soon as it gets to 8, the shift register is treated as a command value
+volatile int targetIndex[5] = {2,2,2,2,2};
+/* first two letters  in the target lines are always first lettter of the target name and semicolon */
+volatile int targets[5][16] = { 
+ { 35, 26, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0 },
+ { 38, 26, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0 },
+ { 53, 26, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0 },
+ { 41, 26, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0 },
+ { 47, 26, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0 }
+};
 
 void lcdDelayMs(int ms) {
 	int i;
@@ -96,7 +108,7 @@ void lcdDelayMs(int ms) {
 		lcdDelay1Ms();
 }
 
-void enable() {
+void enable() { // pulse E signal
 	lcdDelayNs(LCD_tDH);
 	setPinHigh(LCD_E);
 	lcdDelayNs(LCD_tDDR);
@@ -106,8 +118,8 @@ void enable() {
 
 void useDisplay(int dn) {
 	switch(dn) {
-		case 0: setPinLow(LCD_CS1); setPinHigh(LCD_CS2); break;
-		case 1: setPinLow(LCD_CS2); setPinHigh(LCD_CS1); break;
+		case LCD_USE_1: setPinLow(LCD_CS1); setPinHigh(LCD_CS2); break;
+		case LCD_USE_2: setPinLow(LCD_CS2); setPinHigh(LCD_CS1); break;
 		default: setPinLow(LCD_CS1); setPinLow(LCD_CS2);
 	}
 }
@@ -167,7 +179,7 @@ void clearScreen(int full) {
 	int i,j;
 
 	if (full == 0x01) {
-		useDisplay(2);
+		useDisplay(LCD_USE_BOTH);
 	}
 
 	writeCommand(CMD_SETZ | 0x00);
@@ -183,36 +195,31 @@ void clearScreen(int full) {
 	}
 }
 
-void printChar(char c) {
+void printChar(int cNumber) {
 	// find char in charSet var and print it from charMap
-	int i,j;
-	i=0;
-	while (i < charIndexMax) {
-		if (charSet[i] != c) {
-			i++;
-		} else break;
-	}
-	if (i == charIndexMax) i=31;
+	if (cNumber < 0 || cNumber >= charIndexMax) return;
+	int j;
 
 	for (j=0; j<8; j++) {
-		writeData(charMap[i][j]);
+		writeData(charMap[cNumber][j]);
 	}
 }
 
 void redraw() {
-	int i,j;
-	for (i=0; i<TARGETS_COUNT; i++) {
-		useDisplay(0);
+	int i;
+	int j;
+	for (i = 0; i < TARGETS_COUNT; i++) {
+		useDisplay(LCD_USE_1);
 		writeCommand(CMD_SETX | i);
 		writeCommand(CMD_SETY);
-		for (i=0; i<8; i++) {
-			printChar(targets[target][i]);
+		for (j=0; j<8; j++) {
+			printChar(targets[i][j]);
 		}
-		useDisplay(1);
+		useDisplay(LCD_USE_2);
 		writeCommand(CMD_SETX | i);
 		writeCommand(CMD_SETY);
-		for (i=8; i<16; i++) {
-			printChar(targets[target][i]);
+		for (j=8; j<16; j++) {
+			printChar(targets[i][j]);
 		}
 	}
 }
@@ -238,18 +245,13 @@ int main(void) {
 
 	lcdDelayMs(20);
 
-	useDisplay(0);
+	useDisplay(LCD_USE_BOTH);
 	clearScreen(0x02);
 	writeCommand(CMD_SETX | 0);
 	writeCommand(CMD_SETY | 0);
 	writeCommand(CMD_SETZ | 0);
 	writeCommand(CMD_ON);
 	lcdDelayMs(50);
-
-	useDisplay(0);
-
-	demo1();
-	clearScreen();
 
 	shiftReg = 0;
 	shiftRegClock = 0;
@@ -271,25 +273,26 @@ __interrupt void InterruptVectorPort2() {
 		} else {
 			shiftReg &= ~BIT0;
 		}
-		if (shiftRegClock == SHIFT_REG_CLOCK_MAX-1) /* size of shift reg clock is reached */
+		shiftRegClock++;
+		if (shiftRegClock >= SHIFT_REG_CLOCK_MAX) { /* size of shift reg clock is reached */
 
-			int command = shiftReg & 0xff00;
-			int target  = shiftReg >> 8;
+			int command = shiftReg & CMD_MASK;
+			int target  = shiftReg >> CMD_LENGTH_BITS;
 
-			if (command > 0 && command < CHAR_INDEX_MAX && target < TARGETS_COUNT && target > 0) {
-				if (command == CHAR_INDEX_MAX) { /* clear str command */
-					int c = 0;
-					for (c = 0; c < 16; c++)
-						targets[target][c] = EMPTY_TARGETS[target][c];
-				} else {
-					targets[target][targetIndex[target]] = command;
+			if (command == CMD_CLEAR) { /* clear str command */
+				int c = 0;
+				for (c = 2; c < 16; c++)
+					targets[target][c] = 0;
+				targetIndex[target]=2;
+			} else {
+				targets[target][targetIndex[target]] = command;
+				if (targetIndex[target] >= 15)
+					targetIndex[target] = 2;
+				else
 					targetIndex[target]++;
-				}
 			}
 			shiftReg = 0;
-			shiftRegclock = 0;
-		} else {
-			shiftRegClock++;
+			shiftRegClock = 0;
 		}
 	}
 }
