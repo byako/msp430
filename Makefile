@@ -3,6 +3,8 @@ CFLAGS=-Os -Wall -g -mmcu=msp430g2553
 
 LCD_OBJS=lcd.o
 ROTARY_OBJ=rotary.o
+.PHONY : clean
+OBJS=${LCD_OBJS} ${ROTARY_OBJ}
 
 all: rotary lcd
 
@@ -16,4 +18,4 @@ lcd: $(LCD_OBJS)
 	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm lcd.elf rotary.elf $(OBJS)
+	-rm -f lcd.elf rotary.elf *.o
