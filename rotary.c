@@ -37,6 +37,7 @@ volatile int enabled = 0;
 volatile int dir = 0; /* -1 / +1 */
 volatile int prevPos = 0x00;
 volatile int delayValue = 50;
+volatile int locked = 0;
 
 void delayMs(int ms) {
 	int i;
@@ -56,7 +57,7 @@ int main(void) {
 	P2SEL &= ~BIT7;
 
 	P1DIR =  0xff & ~BIT4;      // everyone is output except button S2
-	P2DIR =  0xFC;              // P2.2 - P2.7 are output
+	P2DIR =  0xF8;              // P2.3 - P2.7 are output
 
 	P1OUT =  0x00;
 	P2OUT &= 0x00;
@@ -74,8 +75,9 @@ int main(void) {
     P1OUT &= ~LED_RED;
     delayMs(50);
 
-	P2IE |= BIT0 ;   // Interrupt on Input Pin P2.0 & P2.1
-	P2IE |= BIT1 ;   // Interrupt on Input Pin P2.0 & P2.1
+	P2IE |= BIT0 ;   // Pin P2.0 - rotary enc A
+	P2IE |= BIT1 ;   // Pin P2.1 - rotary enc B
+    P2IE |= BIT2 ;   // Pin P2.2 - lock / unlock scrolling
 	P1IE |= BIT4 ;   // interrupt on button press
 	_BIS_SR(GIE);
 
@@ -98,9 +100,21 @@ __interrupt void InterruptVectorPort2() {
 
 	if (P2IFG & BIT0) { /* if it was pin#0 who interrupted */
 		P2IFG &= ~BIT0; /* Clear Interrupt Flag */
-	} else { /* it was BIT1 */
+	}
+    else if (P2IFG & BIT1) { /* it was BIT1 */
 		P2IFG &= ~BIT1;
 	}
+    else if (P2IFG & BIT2) {
+        locked ^= 1;
+        return;
+    }
+    else { // wut ?
+        return;
+    }
+
+    if (locked) {
+        return;
+    }
 
     if (P2IN & BIT0)
         curPos |= 0x01;
