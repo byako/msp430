@@ -100,10 +100,10 @@ GPIO.output(dataPin, 0);
 
 while(1):
 	toSend[0]=str('Z'+str(psutil.cpu_percent()));
-	toSend[1]=str('Z'+readableSize(psutil.avail_phymem()));
-	tp = psutil.network_io_counters();
-	toSend[3]=str('Z'+readableSize(tp[0]));
-	toSend[4]=str('Z'+readableSize(tp[1]));
+	toSend[1]=str('Z'+readableSize(psutil.virtual_memory().available))
+	tp = psutil.net_io_counters();
+	toSend[3]=str('Z'+readableSize(tp.bytes_recv));
+	toSend[4]=str('Z'+readableSize(tp.bytes_sent));
 	toSend[2]=str('Z'+str(getUptime()).replace(" days","d"));
 	sendData();
 	time.sleep(1);
